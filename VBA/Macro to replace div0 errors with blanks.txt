@@ -1,0 +1,18 @@
+Sub Replace_div0_error()
+'Dim ws As Worksheet
+Dim Cel As Range
+For Each ws In Sheets(Array("2018_May_BP", "2018_Jun_BP", "2018_Jul_BP", "2018_Aug_BP", "2018_Sep_BP", "2018_Oct_BP", "2018_Nov_BP", "2018_Dec_BP"))
+    With ws
+        For Each Cel In .UsedRange
+            If IsError(Cel) Then
+                If Cel.Value = CVErr(xlErrDiv0) Then Cel.Value = ClearContents
+            End If
+        Next Cel
+    End With
+Next ws
+' Replace_div0_error Macro
+' Replaces div0 with blanks
+'
+' Keyboard Shortcut: Ctrl+Shift+I
+'
+End Sub

@@ -2,7 +2,7 @@ getwd()
 setwd("C:/R_things")
 data <- read.csv("data.csv")
 View(data)
-
+# dataset at https://www.kaggle.com/mahirahmzh/starbucks-customer-retention-malaysia-survey/
 # install.packages("ggplot2")
 # install.packages("tidyverse")
 # 

@@ -1,4 +1,3 @@
-setwd("C:/Programs and stuff/R Projects/Average Daily Polyclinic Attendances for Selected Diseases")
 library(dplyr)
 library(ggplot2)
 library(tidyverse)

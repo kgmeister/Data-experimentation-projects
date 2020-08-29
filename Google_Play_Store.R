@@ -35,4 +35,19 @@ playstore$Installs <- as.numeric(gsub(",","",playstore$Installs), scientific = F
 #-------------- Removing NAs ---------------------------
 playstore<-na.omit(playstore)
 
-write.csv(playstore, "playstore.csv")
+#write.csv(playstore, "playstore.csv")
+
+
+#--------- Bubble plot -----------------------
+library(extrafontdb)
+library(viridis)
+library(hrbrthemes)
+library(extrafont)
+
+
+ggplot(data=playstore, aes(x=Rating, y= Installs, size=Size, color=Category)) + 
+  geom_point(alpha=0.3) + 
+  scale_fill_viridis(discrete=TRUE, guide=FALSE, option="A") +
+  scale_size(range = c(0.1, 24)) +
+  theme_ipsum()
+

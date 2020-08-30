@@ -82,3 +82,33 @@ ggplot(data=top10plot, aes(x=Rating, y= Installs, size=Size, color=Category)) +
   scale_fill_viridis(discrete=TRUE, guide=FALSE, option="A") +
   scale_size(range = c(0.1, 24)) +
   theme_ipsum()
+
+#############################################################################################
+#############################################################################################
+
+#~~~~~~~~~~~~~~~~~~ Bubble plot top 10 by Installs ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+#--------------------- Obtaining average Installs vs category ----------------------------
+
+installavg <- playstore[,c('Category',"Installs")]
+installavg <- aggregate(Installs ~ Category, installavg, mean)
+
+installavg <- installavg[order(installavg$Installs, decreasing = TRUE),] 
+
+
+#------------- taking only top 10 installs -----------
+
+topinstall <- installavg[1:10,]
+
+top10install <- playstore[playstore$Category %in% topinstall$Category,]
+top10install$Category <- as.factor(top10install$Category)
+
+top10installplot <- top10install[,c('Category','Rating','Size','Installs')]
+top10installplot <- aggregate(. ~ Category, top10installplot, mean)
+View(top10installplot)
+
+ggplot(data=top10installplot, aes(x=Rating, y= Installs, size=Size, color=Category)) + 
+  geom_point(alpha=0.8) + 
+  scale_fill_viridis(discrete=TRUE, guide=FALSE, option="A") +
+  scale_size(range = c(0.1, 24)) +
+  theme_ipsum()

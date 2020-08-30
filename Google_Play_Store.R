@@ -20,6 +20,8 @@ playstore$Last.Updated <-anydate(playstore$Last.Updated)
 
 playstore<- playstore[!grepl('Varies with device',playstore$Size),]
 
+playstore$Size<- as.numeric(playstore$Size) #Because it will throw up "Discrete value supplied to continuous scale" otherwise during bubble plot
+
 
 #-------------- Changing the millions into numbers and removing the "+" in installs ----------------
 

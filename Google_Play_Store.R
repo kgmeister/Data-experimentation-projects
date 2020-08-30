@@ -38,15 +38,7 @@ playstore$Installs <- as.numeric(gsub(",","",playstore$Installs), scientific = F
 playstore<-na.omit(playstore)
 
 #write.csv(playstore, "playstore.csv")
-
-#####################  End of dataset cleaning ################################
-
-#--------- Bubble plot -----------------------
-library(extrafontdb)
-library(viridis)
-library(hrbrthemes)
-library(extrafont)
-
+###################  End of dataset cleaning ################################
 
 ggplot(data=playstore, aes(x=Rating, y= Installs, size=Size, color=Category)) + 
   geom_point(alpha=0.3) + 
@@ -54,3 +46,39 @@ ggplot(data=playstore, aes(x=Rating, y= Installs, size=Size, color=Category)) +
   scale_size(range = c(0.1, 24)) +
   theme_ipsum()
 
+############################################################################################
+############################################################################################
+
+#--------------------- Obtaining average rating vs category ----------------------------
+
+ratingavg <- playstore[,c('Category',"Rating")]
+ratingavg <- aggregate(Rating ~ Category, ratingavg, mean)
+
+ratingavg <- ratingavg[order(ratingavg$Rating, decreasing = TRUE),] #Sorting by decreasing Rating
+
+#------- Bar plot of rating avg --------
+ggplot(data=ratingavg, aes(x= Category, y= Rating)) +
+  geom_bar(stat = "identity", fill = rainbow(n=length(ratingavg$Rating)))
+
+#------------- taking only top 10 -----------
+
+toprating <- ratingavg[1:10,]
+View(toprating)
+
+###########################################################################################
+
+#------------- Bubble plot top 10 ------------------------
+
+top10 <- playstore[playstore$Category %in% toprating$Category,]
+top10$Category <- as.factor(top10$Category)
+
+#--- Extracting out relevant variables for plot, and obtaining the average -----
+top10plot <- top10[,c('Category','Rating','Size','Installs')]
+top10plot <- aggregate(. ~ Category, top10plot, mean)
+
+
+ggplot(data=top10plot, aes(x=Rating, y= Installs, size=Size, color=Category)) + 
+  geom_point(alpha=0.8) + 
+  scale_fill_viridis(discrete=TRUE, guide=FALSE, option="A") +
+  scale_size(range = c(0.1, 24)) +
+  theme_ipsum()

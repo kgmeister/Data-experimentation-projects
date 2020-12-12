@@ -1,0 +1,6 @@
+myfile = open("fruits.txt")
+fruits = myfile.read()
+myfile.close()
+fruits = fruits.splitlines()
+for i in fruits:
+    print(len(i))

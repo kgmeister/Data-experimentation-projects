@@ -1,8 +1,0 @@
-Commands:
-pip3 install pyinstaller
-
-pyinstaller --onefile --windowed frontend.py
-
-#########################################################
-
-Next go into code (or any file the project is under) and look under "dist". The executable should be there.

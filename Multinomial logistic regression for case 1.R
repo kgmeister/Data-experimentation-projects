@@ -1,4 +1,3 @@
-setwd("C:/Programs_and_stuff/R Projects/MSD_Interview_stuff")
 case1<- read.csv("Case 1.csv")
 
 
@@ -11,20 +10,20 @@ case1<-case1 %>% na.omit(case1) %>% select(-Patient.ID)
 
 
 #ordering the disease stages as levels
-case1$ï..Disease.stage<- factor(case1$ï..Disease.stage, order = TRUE, levels = c("F0", "F1", "F2", "F3", "F4"))
+case1$Ã¯..Disease.stage<- factor(case1$Ã¯..Disease.stage, order = TRUE, levels = c("F0", "F1", "F2", "F3", "F4"))
 
 #Finding the mean for bar plot
-case1_mean <- aggregate(.~ï..Disease.stage,case1, mean)
+case1_mean <- aggregate(.~Ã¯..Disease.stage,case1, mean)
 
 #Finding the SD for bar plot, using group_by into summarise method. This works for mean too
-case1_sd <- case1%>% group_by(ï..Disease.stage)%>% summarise(A=sd(Parameter.A), B=sd(Parameter.B),
+case1_sd <- case1%>% group_by(Ã¯..Disease.stage)%>% summarise(A=sd(Parameter.A), B=sd(Parameter.B),
                                                  C=sd(Parameter.C), D=sd(Parameter.D), E=sd(Parameter.E))
 
 #Primary plotting
 plot1 <- ggplot() +
-  geom_bar(data=case1_mean, aes(x=ï..Disease.stage, y=Parameter.D), stat="identity", fill="skyblue", alpha=0.7) +
-  geom_point(data=case1, aes(x=ï..Disease.stage, y=Parameter.D)) +
-  geom_errorbar(data=case1_sd, aes(x=ï..Disease.stage, ymin = case1_mean$Parameter.D - D, ymax = case1_mean$Parameter.D + D,
+  geom_bar(data=case1_mean, aes(x=Ã¯..Disease.stage, y=Parameter.D), stat="identity", fill="skyblue", alpha=0.7) +
+  geom_point(data=case1, aes(x=Ã¯..Disease.stage, y=Parameter.D)) +
+  geom_errorbar(data=case1_sd, aes(x=Ã¯..Disease.stage, ymin = case1_mean$Parameter.D - D, ymax = case1_mean$Parameter.D + D,
                                    width=0.4, colour="orange", alpha=1, size=0.01)) +
   ggtitle("Plot of Parameter D against Disease stage") + xlab("Disease stage") + ylab("Mean")
 
@@ -44,7 +43,7 @@ train <- sample_frac(case1, 0.7)
 test <- case1
 
 # relevel() not needed as factors are already ordered. "-1" because I don't think intercept is needed
-case1model_1 <- multinom(ï..Disease.stage ~ .-1, data = train)
+case1model_1 <- multinom(Ã¯..Disease.stage ~ .-1, data = train)
 summary(case1model_1)
 
 
@@ -64,10 +63,10 @@ case1model_1_F1_params <- coeftest_result_1[1:5,]
 
 # Reordering levels so model takes F4 as reference instead to show F0 (??? to clarify with team)
 train2 <- train
-train2$ï..Disease.stage <- factor(train2$ï..Disease.stage, order = TRUE, levels = c("F4","F3","F2","F1","F0"))
+train2$Ã¯..Disease.stage <- factor(train2$Ã¯..Disease.stage, order = TRUE, levels = c("F4","F3","F2","F1","F0"))
 
 #running model on re-ordered dataframe to get my F0 back
-case1model_2 <- multinom(ï..Disease.stage ~ .-1, data = train2)
+case1model_2 <- multinom(Ã¯..Disease.stage ~ .-1, data = train2)
 summary(case1model_2)
 
 
@@ -81,7 +80,7 @@ head(probability.table <- fitted(case1model_1))
 train$predicted <- predict(case1model_1, newdata = train, "class")
 
 # Building classification table
-ctable <- table(train$ï..Disease.stage, train$predicted)
+ctable <- table(train$Ã¯..Disease.stage, train$predicted)
 
 # Calculating accuracy - sum of diagonal elements divided by total obs
 round((sum(diag(ctable))/sum(ctable))*100,2)
@@ -89,5 +88,5 @@ round((sum(diag(ctable))/sum(ctable))*100,2)
 
 # Using above model for test, same steps
 test$predicted <- predict(case1model_1, newdata = test, "class")
-ctable2 <- table(test$ï..Disease.stage, test$predicted)
+ctable2 <- table(test$Ã¯..Disease.stage, test$predicted)
 round((sum(diag(ctable2))/sum(ctable2))*100,2)

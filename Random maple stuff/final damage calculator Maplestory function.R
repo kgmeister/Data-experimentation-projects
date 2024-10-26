@@ -1,4 +1,4 @@
-setwd('C:/Programs_and_stuff/R Projects/Random/exLotus_EDA')
+setwd('C:/exLotus_EDA')
 exLotus <- read.csv('exLotus clear list.csv')
 library(tidyverse)
 

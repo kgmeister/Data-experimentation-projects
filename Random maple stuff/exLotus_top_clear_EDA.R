@@ -1,4 +1,4 @@
-setwd("C:/Programs_and_stuff/R Projects/Random/exLotus_EDA")
+setwd("C:/exLotus_EDA")
 library(tidyverse)
 ranking_final<- read.csv('exLotus_ranking_final.csv')
 

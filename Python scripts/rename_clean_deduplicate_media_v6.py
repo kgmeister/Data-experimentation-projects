@@ -31,7 +31,19 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
-def remove_exif_image(image_path):
+def move_to_corrupted(corrupted_dir, file_path, reason):
+    """Move a file to the Corrupted folder with a reason."""
+    try:
+        os.makedirs(corrupted_dir, exist_ok=True)
+        corrupted_path = os.path.join(corrupted_dir, os.path.basename(file_path))
+        shutil.move(file_path, corrupted_path)
+        print(f"Moved to Corrupted due to {reason}: {file_path} -> {corrupted_path}")
+        return True
+    except Exception as e:
+        print(f"Error moving {file_path} to Corrupted: {e}")
+        return False
+
+def remove_exif_image(image_path, corrupted_dir):
     try:
         image = Image.open(image_path)
         image.save(image_path, exif=b'')
@@ -39,8 +51,9 @@ def remove_exif_image(image_path):
         print(f"Removed EXIF data from: {image_path}")
     except Exception as e:
         print(f"Error removing EXIF from {image_path}: {e}")
+        move_to_corrupted(corrupted_dir, image_path, "EXIF removal failure")
 
-def get_image_hash(image_path):
+def get_image_hash(image_path, corrupted_dir):
     try:
         with Image.open(image_path) as img:
             hash_value = imagehash.dhash(img)
@@ -48,9 +61,10 @@ def get_image_hash(image_path):
             return hash_value
     except Exception as e:
         print(f"Error hashing {image_path}: {e}")
+        move_to_corrupted(corrupted_dir, image_path, "hashing failure")
         return None
 
-def get_video_frame_hashes(video_path, num_frames=3):
+def get_video_frame_hashes(video_path, num_frames=3, corrupted_dir=None):
     temp_dir = None
     frame_paths = []
     try:
@@ -93,12 +107,16 @@ def get_video_frame_hashes(video_path, num_frames=3):
         # Compute hashes for extracted frames
         frame_hashes = []
         for frame_path in frame_paths:
-            frame_hash = get_image_hash(frame_path)
+            frame_hash = get_image_hash(frame_path, corrupted_dir)
             if frame_hash:
                 frame_hashes.append(frame_hash)
-        return frame_hashes if frame_hashes else None
+        if not frame_hashes:
+            move_to_corrupted(corrupted_dir, video_path, "no valid frame hashes")
+            return None
+        return frame_hashes
     except Exception as e:
         print(f"Error processing video {video_path}: {e}")
+        move_to_corrupted(corrupted_dir, video_path, "video processing failure")
         return None
     finally:
         # Explicitly clean up temporary files and directory
@@ -118,11 +136,13 @@ def get_video_frame_hashes(video_path, num_frames=3):
 def process_folder(root_dir):
     media_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.mp4', '.mov', '.avi'}
     duplicates_dir = os.path.join(root_dir, "Duplicates")
+    corrupted_dir = os.path.join(root_dir, "Corrupted")
     os.makedirs(duplicates_dir, exist_ok=True)
+    os.makedirs(corrupted_dir, exist_ok=True)
 
     for folder in os.listdir(root_dir):
         folder_path = os.path.join(root_dir, folder)
-        if not os.path.isdir(folder_path) or folder == "Duplicates":
+        if not os.path.isdir(folder_path) or folder in ("Duplicates", "Corrupted"):
             continue
 
         print(f"\nProcessing folder: {folder}")
@@ -137,7 +157,7 @@ def process_folder(root_dir):
             file_path = os.path.join(folder_path, filename)
             mime_type, _ = mimetypes.guess_type(file_path)
             if mime_type and mime_type.startswith('image'):
-                remove_exif_image(file_path)
+                remove_exif_image(file_path, corrupted_dir)
 
         # Track hashes and processed files
         hash_dict = {}  # Store hash (image) or list of hashes (video): path
@@ -145,15 +165,17 @@ def process_folder(root_dir):
 
         for filename in media_files:
             old_path = os.path.join(folder_path, filename)
+            if not os.path.exists(old_path):  # Skip if already moved (e.g., to Corrupted)
+                continue
             extension = os.path.splitext(filename)[1].lower()
             mime_type, _ = mimetypes.guess_type(old_path)
 
             # Compute hash based on file type
             file_hashes = None
             if mime_type and mime_type.startswith('image'):
-                file_hashes = [get_image_hash(old_path)]
+                file_hashes = [get_image_hash(old_path, corrupted_dir)]
             elif mime_type and mime_type.startswith('video'):
-                file_hashes = get_video_frame_hashes(old_path)
+                file_hashes = get_video_frame_hashes(old_path, corrupted_dir=corrupted_dir)
             if not file_hashes:
                 continue
 
@@ -189,6 +211,7 @@ def process_folder(root_dir):
                 file_counter += 1
             except Exception as e:
                 print(f"Error processing {old_path}: {e}")
+                move_to_corrupted(corrupted_dir, old_path, "renaming failure")
 
         # Log completion of subfolder processing
         print(f"Finished processing folder: {folder}")

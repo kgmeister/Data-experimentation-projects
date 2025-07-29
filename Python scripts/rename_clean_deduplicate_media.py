@@ -54,11 +54,11 @@ def remove_exif_image(image_path, corrupted_dir):
         print(f"Error removing EXIF from {image_path}: {e}")
         move_to_corrupted(corrupted_dir, image_path, "EXIF removal failure")
 
-def get_image_hash(image_path, corrupted_dir, use_phash=True):
-    """Compute perceptual hash for an image (phash or dhash)."""
+def get_image_hash(image_path, corrupted_dir):
+    """Compute perceptual hash (phash) for an image."""
     try:
         with Image.open(image_path) as img:
-            hash_value = imagehash.phash(img) if use_phash else imagehash.dhash(img)
+            hash_value = imagehash.phash(img)
             print(f"Hash for {image_path}: {str(hash_value)}")
             return hash_value
     except Exception as e:
@@ -66,53 +66,58 @@ def get_image_hash(image_path, corrupted_dir, use_phash=True):
         move_to_corrupted(corrupted_dir, image_path, "hashing failure")
         return None
 
-def get_video_frame_hashes(video_path, num_frames=3, corrupted_dir=None):
+def get_video_frame_hashes(video_path, corrupted_dir, num_frames=3):
     """Extract frames from a video and compute dhash for each."""
     temp_dir = None
     frame_paths = []
     try:
-        # Check if ffmpeg is available
         ffmpeg_path = shutil.which("ffmpeg")
         if not ffmpeg_path:
             raise FileNotFoundError("FFmpeg not found in PATH. Please install FFmpeg and add it to PATH.")
 
-        # Create temporary directory for frame extraction
         temp_dir = tempfile.mkdtemp()
         print(f"Created temporary directory: {temp_dir}")
         temp_dirs.append(temp_dir)
 
-        # Extract video duration using ffprobe
-        duration_cmd = [ffmpeg_path, "-i", video_path]
-        result = subprocess.run(duration_cmd, capture_output=True, text=True)
-        duration = 10  # Default duration in seconds if ffprobe fails
-        duration_pattern = r"Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})"
-        for line in result.stderr.splitlines():
-            match = re.search(duration_pattern, line)
-            if match:
-                h, m, s = map(float, match.groups())
-                duration = h * 3600 + m * 60 + s
-                break
+        # Get video duration
+        result = subprocess.run([ffmpeg_path, "-i", video_path], capture_output=True, text=True)
+        duration = 10  # Fallback duration
+        match = re.search(r"Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})", result.stderr)
+        if match:
+            h, m, s = map(float, match.groups())
+            duration = h * 3600 + m * 60 + s
+        else:
+            print(f"Could not parse duration for {video_path}: {result.stderr}")
 
-        # Calculate frame extraction times
+        # Extract frames
         interval = duration / (num_frames + 1)
         for i in range(1, num_frames + 1):
             output_path = os.path.join(temp_dir, f"frame_{i}.png")
-            subprocess.run([
-                ffmpeg_path, "-i", video_path, "-ss", str(i * interval),
-                "-vframes", "1", "-q:v", "2", output_path
-            ], check=True, capture_output=True, text=True)
-            if os.path.exists(output_path):
-                frame_paths.append(output_path)
-                print(f"Created temporary frame: {output_path}")
-            else:
-                print(f"Failed to create temporary frame: {output_path}")
+            try:
+                result = subprocess.run([
+                    ffmpeg_path, "-i", video_path, "-ss", str(i * interval),
+                    "-vframes", "1", "-q:v", "2", output_path
+                ], check=True, capture_output=True, text=True)
+                if os.path.exists(output_path):
+                    frame_paths.append(output_path)
+                    print(f"Created temporary frame: {output_path}")
+                else:
+                    print(f"Failed to create temporary frame: {output_path}")
+                    print(f"FFmpeg stderr: {result.stderr}")
+            except subprocess.CalledProcessError as e:
+                print(f"FFmpeg error extracting frame {i} from {video_path}: {e}")
+                print(f"FFmpeg stderr: {e.stderr}")
 
-        # Compute dhash for extracted frames
+        # Compute dhash for frames
         frame_hashes = []
         for frame_path in frame_paths:
-            frame_hash = get_image_hash(frame_path, corrupted_dir, use_phash=False)
-            if frame_hash:
-                frame_hashes.append(frame_hash)
+            try:
+                with Image.open(frame_path) as img:
+                    frame_hash = imagehash.dhash(img)
+                    frame_hashes.append(frame_hash)
+                    print(f"Hash for {frame_path}: {str(frame_hash)}")
+            except Exception as e:
+                print(f"Error hashing frame {frame_path}: {e}")
         if not frame_hashes:
             move_to_corrupted(corrupted_dir, video_path, "no valid frame hashes")
             return None
@@ -122,7 +127,6 @@ def get_video_frame_hashes(video_path, num_frames=3, corrupted_dir=None):
         move_to_corrupted(corrupted_dir, video_path, "video processing failure")
         return None
     finally:
-        # Clean up temporary files and directory
         if temp_dir and os.path.exists(temp_dir):
             try:
                 for frame_path in frame_paths:
@@ -167,7 +171,6 @@ def process_folder(root_dir):
         for filename in media_files:
             old_path = os.path.join(folder_path, filename)
             extension = os.path.splitext(filename)[1].lower()
-            # Check if file already has correct naming pattern
             match = re.match(rf"{re.escape(folder)} \((\d+)\){re.escape(extension)}$", filename)
             if match:
                 renamed_files.append(filename)
@@ -206,21 +209,21 @@ def process_folder(root_dir):
             # Compute hash based on file type
             file_hashes = None
             if mime_type and mime_type.startswith('image'):
-                file_hashes = [get_image_hash(file_path, corrupted_dir, use_phash=True)]
+                hash_value = get_image_hash(file_path, corrupted_dir)
+                file_hashes = [hash_value] if hash_value else None
             elif mime_type and mime_type.startswith('video'):
-                file_hashes = get_video_frame_hashes(file_path, corrupted_dir=corrupted_dir)
+                file_hashes = get_video_frame_hashes(file_path, corrupted_dir)
             if not file_hashes:
                 continue
 
-            # Check for duplicates using Hamming distance
+            # Check for duplicates
             is_duplicate = False
             for existing_hashes in hash_dict:
                 if len(file_hashes) != len(existing_hashes):
                     continue
                 all_similar = True
                 for new_hash, existing_hash in zip(file_hashes, existing_hashes):
-                    # Hamming distance thresholds: 3 for images (phash), 5 for videos (dhash)
-                    threshold = 3 if mime_type.startswith('image') else 5
+                    threshold = 3 if mime_type.startswith('image') else 5  # Hamming distance: 3 for phash, 5 for dhash
                     if new_hash - existing_hash > threshold:
                         all_similar = False
                         break

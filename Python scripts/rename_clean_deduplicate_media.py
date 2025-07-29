@@ -140,9 +140,19 @@ def get_video_frame_hashes(video_path, corrupted_dir, num_frames=3):
             except Exception as e:
                 print(f"Error deleting temporary directory {temp_dir}: {e}")
 
-def get_next_available_number(folder_path, folder, extension):
-    """Find the next available number for a filename to avoid conflicts."""
-    i = 1
+def get_highest_existing_number(folder_path, folder, extension):
+    """Find the highest number among correctly named files in the folder."""
+    max_number = 0
+    for filename in os.listdir(folder_path):
+        match = re.match(rf"{re.escape(folder)} \((\d+)\){re.escape(extension)}$", filename)
+        if match:
+            number = int(match.group(1))
+            max_number = max(max_number, number)
+    return max_number
+
+def get_next_available_number(folder_path, folder, extension, start_number):
+    """Find the next available number starting from start_number."""
+    i = start_number + 1
     while True:
         new_filename = f"{folder} ({i}){extension}"
         new_path = os.path.join(folder_path, new_filename)
@@ -176,7 +186,9 @@ def process_folder(root_dir):
                 renamed_files.append(filename)
                 print(f"Skipped renaming (already correct): {old_path}")
                 continue
-            file_number = get_next_available_number(folder_path, folder, extension)
+            # Start numbering from the highest existing number for this extension
+            highest_number = get_highest_existing_number(folder_path, folder, extension)
+            file_number = get_next_available_number(folder_path, folder, extension, highest_number)
             new_filename = f"{folder} ({file_number}){extension}"
             new_path = os.path.join(folder_path, new_filename)
             try:
@@ -240,19 +252,31 @@ def process_folder(root_dir):
             hash_dict[tuple(file_hashes)] = file_path
 
         # Step 4: Re-rename to ensure consistent numbering
-        file_counter = 1
-        for file_hashes, file_path in sorted(hash_dict.items(), key=lambda x: os.path.getmtime(x[1])):
-            extension = os.path.splitext(file_path)[1].lower()
-            new_filename = f"{folder} ({file_counter}){extension}"
-            new_path = os.path.join(folder_path, new_filename)
-            try:
-                if file_path != new_path:
-                    os.rename(file_path, new_path)
-                    print(f"Re-renamed after deduplication: {file_path} -> {new_path}")
-                file_counter += 1
-            except Exception as e:
-                print(f"Error re-renaming {file_path}: {e}")
-                move_to_corrupted(corrupted_dir, file_path, "re-renaming failure")
+        for extension in set(os.path.splitext(f)[1].lower() for f in renamed_files):
+            highest_number = get_highest_existing_number(folder_path, folder, extension)
+            # Filter out non-existent files before sorting
+            valid_items = [(hashes, path) for hashes, path in hash_dict.items() if os.path.exists(path)]
+            for file_hashes, file_path in sorted(valid_items, key=lambda x: os.path.getmtime(x[1])):
+                current_ext = os.path.splitext(file_path)[1].lower()
+                if current_ext != extension:
+                    continue
+                # Check if the file already has the correct name
+                match = re.match(rf"{re.escape(folder)} \((\d+)\){re.escape(extension)}$", os.path.basename(file_path))
+                if match and int(match.group(1)) >= highest_number:
+                    print(f"Skipped re-renaming (already correct): {file_path}")
+                    highest_number = max(highest_number, int(match.group(1)))
+                    continue
+                file_number = get_next_available_number(folder_path, folder, extension, highest_number)
+                new_filename = f"{folder} ({file_number}){extension}"
+                new_path = os.path.join(folder_path, new_filename)
+                try:
+                    if file_path != new_path:
+                        os.rename(file_path, new_path)
+                        print(f"Re-renamed after deduplication: {file_path} -> {new_path}")
+                    highest_number = file_number
+                except Exception as e:
+                    print(f"Error re-renaming {file_path}: {e}")
+                    move_to_corrupted(corrupted_dir, file_path, "re-renaming failure")
 
         print(f"Finished processing folder: {folder_path}")
 

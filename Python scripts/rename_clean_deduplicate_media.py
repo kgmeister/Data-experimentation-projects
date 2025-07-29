@@ -53,10 +53,10 @@ def remove_exif_image(image_path, corrupted_dir):
         print(f"Error removing EXIF from {image_path}: {e}")
         move_to_corrupted(corrupted_dir, image_path, "EXIF removal failure")
 
-def get_image_hash(image_path, corrupted_dir):
+def get_image_hash(image_path, corrupted_dir, use_phash=True):
     try:
         with Image.open(image_path) as img:
-            hash_value = imagehash.dhash(img)
+            hash_value = imagehash.phash(img) if use_phash else imagehash.dhash(img)
             print(f"Hash for {image_path}: {str(hash_value)}")
             return hash_value
     except Exception as e:
@@ -107,7 +107,8 @@ def get_video_frame_hashes(video_path, num_frames=3, corrupted_dir=None):
         # Compute hashes for extracted frames
         frame_hashes = []
         for frame_path in frame_paths:
-            frame_hash = get_image_hash(frame_path, corrupted_dir)
+            # Use dhash for video frames to maintain original behavior
+            frame_hash = get_image_hash(frame_path, corrupted_dir, use_phash=False)
             if frame_hash:
                 frame_hashes.append(frame_hash)
         if not frame_hashes:
@@ -208,7 +209,7 @@ def process_folder(root_dir):
             # Compute hash based on file type
             file_hashes = None
             if mime_type and mime_type.startswith('image'):
-                file_hashes = [get_image_hash(file_path, corrupted_dir)]
+                file_hashes = [get_image_hash(file_path, corrupted_dir, use_phash=True)]
             elif mime_type and mime_type.startswith('video'):
                 file_hashes = get_video_frame_hashes(file_path, corrupted_dir=corrupted_dir)
             if not file_hashes:
@@ -221,7 +222,9 @@ def process_folder(root_dir):
                     continue
                 all_similar = True
                 for new_hash, existing_hash in zip(file_hashes, existing_hashes):
-                    if new_hash - existing_hash > 5:  # Hamming distance threshold
+                    # Use stricter threshold for images (phash)
+                    threshold = 3 if mime_type.startswith('image') else 5
+                    if new_hash - existing_hash > threshold:
                         all_similar = False
                         break
                 if all_similar:

@@ -152,30 +152,49 @@ def process_folder(root_dir):
         ]
         media_files.sort(key=lambda x: os.path.getmtime(os.path.join(folder_path, x)))
 
-        # Remove EXIF data from images first
+        # Rename files first
+        renamed_files = []
+        file_counter = 1
         for filename in media_files:
+            old_path = os.path.join(folder_path, filename)
+            extension = os.path.splitext(filename)[1].lower()
+            new_filename = f"{folder} ({file_counter}){extension}"
+            new_path = os.path.join(folder_path, new_filename)
+            try:
+                os.rename(old_path, new_path)
+                print(f"Renamed: {old_path} -> {new_path}")
+                renamed_files.append(new_filename)
+                file_counter += 1
+            except Exception as e:
+                print(f"Error renaming {old_path}: {e}")
+                move_to_corrupted(corrupted_dir, old_path, "renaming failure")
+                continue
+
+        # Remove EXIF data from images
+        for filename in renamed_files:
             file_path = os.path.join(folder_path, filename)
+            if not os.path.exists(file_path):  # Skip if already moved (e.g., to Corrupted)
+                continue
             mime_type, _ = mimetypes.guess_type(file_path)
             if mime_type and mime_type.startswith('image'):
                 remove_exif_image(file_path, corrupted_dir)
 
-        # Track hashes and processed files
-        hash_dict = {}  # Store hash (image) or list of hashes (video): path
-        file_counter = 1
-
-        for filename in media_files:
-            old_path = os.path.join(folder_path, filename)
-            if not os.path.exists(old_path):  # Skip if already moved (e.g., to Corrupted)
+        # Track hashes and processed files for deduplication
+        hash_dict = {}
+        file_counter = 1  # Reset counter for final renaming after deduplication
+        for filename in renamed_files:
+            file_path = os.path.join(folder_path, filename)
+            if not os.path.exists(file_path):  # Skip if already moved (e.g., to Corrupted)
                 continue
             extension = os.path.splitext(filename)[1].lower()
-            mime_type, _ = mimetypes.guess_type(old_path)
+            mime_type, _ = mimetypes.guess_type(file_path)
 
             # Compute hash based on file type
             file_hashes = None
             if mime_type and mime_type.startswith('image'):
-                file_hashes = [get_image_hash(old_path, corrupted_dir)]
+                file_hashes = [get_image_hash(file_path, corrupted_dir)]
             elif mime_type and mime_type.startswith('video'):
-                file_hashes = get_video_frame_hashes(old_path, corrupted_dir=corrupted_dir)
+                file_hashes = get_video_frame_hashes(file_path, corrupted_dir=corrupted_dir)
             if not file_hashes:
                 continue
 
@@ -184,34 +203,34 @@ def process_folder(root_dir):
             for existing_hashes in hash_dict:
                 if len(file_hashes) != len(existing_hashes):
                     continue
-                # For images: single hash comparison; for videos: all frame hashes must be similar
                 all_similar = True
                 for new_hash, existing_hash in zip(file_hashes, existing_hashes):
                     if new_hash - existing_hash > 5:  # Hamming distance threshold
                         all_similar = False
                         break
                 if all_similar:
-                    duplicate_path = os.path.join(duplicates_dir, f"{folder}_duplicate_{os.path.basename(old_path)}")
-                    shutil.move(old_path, duplicate_path)
-                    print(f"Moved duplicate: {old_path} -> {duplicate_path}")
+                    duplicate_path = os.path.join(duplicates_dir, f"{folder}_duplicate_{os.path.basename(file_path)}")
+                    shutil.move(file_path, duplicate_path)
+                    print(f"Moved duplicate: {file_path} -> {duplicate_path}")
                     is_duplicate = True
                     break
 
             if is_duplicate:
                 continue
 
-            hash_dict[tuple(file_hashes)] = old_path
+            hash_dict[tuple(file_hashes)] = file_path
 
-            # Rename file
+            # Re-rename file to ensure consistent numbering after deduplication
             new_filename = f"{folder} ({file_counter}){extension}"
             new_path = os.path.join(folder_path, new_filename)
             try:
-                os.rename(old_path, new_path)
-                print(f"Renamed: {old_path} -> {new_path}")
+                if file_path != new_path:  # Only rename if the name has changed
+                    os.rename(file_path, new_path)
+                    print(f"Re-renamed after deduplication: {file_path} -> {new_path}")
                 file_counter += 1
             except Exception as e:
-                print(f"Error processing {old_path}: {e}")
-                move_to_corrupted(corrupted_dir, old_path, "renaming failure")
+                print(f"Error re-renaming {file_path}: {e}")
+                move_to_corrupted(corrupted_dir, file_path, "re-renaming failure")
 
         # Log completion of subfolder processing
         print(f"Finished processing folder: {folder}")

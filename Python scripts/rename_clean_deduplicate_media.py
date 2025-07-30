@@ -167,6 +167,8 @@ def get_next_available_number(folder_path, folder, extension, start_number):
 
 def process_folder(root_dir, phash_threshold=10, dhash_threshold=2):
     """Process all media files in subfolders recursively."""
+    print(f"Using thresholds: phash_threshold={phash_threshold} (images), {phash_threshold} (videos); "
+          f"dhash_threshold={dhash_threshold} (images), 7 (videos)")
     media_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.mp4', '.mov', '.avi'}
     duplicates_dir = os.path.join(root_dir, "Duplicates")
     corrupted_dir = os.path.join(root_dir, "Corrupted")
@@ -239,12 +241,15 @@ def process_folder(root_dir, phash_threshold=10, dhash_threshold=2):
                 if len(file_hashes) != len(existing_hashes):
                     continue
                 all_similar = True
+                # Set thresholds based on file type
+                current_phash_threshold = phash_threshold  # 10 for both images and videos
+                current_dhash_threshold = 7 if mime_type and mime_type.startswith('video') else dhash_threshold
                 for new_hash, existing_hash in zip(file_hashes, existing_hashes):
                     new_phash, new_dhash = new_hash
                     existing_phash, existing_dhash = existing_hash
                     phash_distance = new_phash - existing_phash
                     dhash_distance = new_dhash - existing_dhash
-                    if phash_distance > phash_threshold or dhash_distance > dhash_threshold:
+                    if phash_distance > current_phash_threshold or dhash_distance > current_dhash_threshold:
                         all_similar = False
                         break
                     with open(os.path.join(root_dir, "deduplication_log.txt"), "a") as log_file:
@@ -300,8 +305,8 @@ def process_folder(root_dir, phash_threshold=10, dhash_threshold=2):
 def main():
     """Main function to initiate processing."""
     parser = argparse.ArgumentParser(description="Rename, clean, and deduplicate media files.")
-    parser.add_argument("--phash-threshold", type=int, default=20, help="Hamming distance threshold for deduplication (phash, 16x16)")
-    parser.add_argument("--dhash-threshold", type=int, default=2, help="Hamming distance threshold for deduplication (dhash, 16x16)")
+    parser.add_argument("--phash-threshold", type=int, default=10, help="Hamming distance threshold for deduplication (phash, 16x16)")
+    parser.add_argument("--dhash-threshold", type=int, default=2, help="Hamming distance threshold for deduplication (dhash, 16x16, images only)")
     parser.add_argument("--root-dir", type=str, default="Content", help="Root directory containing media files")
     args = parser.parse_args()
 
@@ -309,7 +314,8 @@ def main():
     if not os.path.exists(root_directory):
         print(f"Directory '{root_directory}' not found.")
         return
-    print(f"Processing media files in '{root_directory}' with phash_threshold={args.phash_threshold}, dhash_threshold={args.dhash_threshold}...")
+    print(f"Processing media files in '{root_directory}' with phash_threshold={args.phash_threshold}, "
+          f"dhash_threshold={args.dhash_threshold} (images), 7 (videos)...")
     process_folder(root_dir=args.root_dir, phash_threshold=args.phash_threshold, dhash_threshold=args.dhash_threshold)
     print("Processing complete.")
 

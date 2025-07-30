@@ -165,7 +165,7 @@ def get_next_available_number(folder_path, folder, extension, start_number):
             return i
         i += 1
 
-def process_folder(root_dir, phash_threshold=20, dhash_threshold=2):
+def process_folder(root_dir, phash_threshold=10, dhash_threshold=2):
     """Process all media files in subfolders recursively."""
     media_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.mp4', '.mov', '.avi'}
     duplicates_dir = os.path.join(root_dir, "Duplicates")

@@ -9,6 +9,7 @@ import re
 import atexit
 import signal
 import sys
+import argparse
 
 # Global list to track temporary directories
 temp_dirs = []
@@ -55,19 +56,21 @@ def remove_exif_image(image_path, corrupted_dir):
         move_to_corrupted(corrupted_dir, image_path, "EXIF removal failure")
 
 def get_image_hash(image_path, corrupted_dir):
-    """Compute perceptual hash (phash) for an image."""
+    """Compute both perceptual hash (phash) and difference hash (dhash) for an image with 16x16 hash size."""
     try:
         with Image.open(image_path) as img:
-            hash_value = imagehash.phash(img)
-            print(f"Hash for {image_path}: {str(hash_value)}")
-            return hash_value
+            phash_value = imagehash.phash(img, hash_size=16)
+            dhash_value = imagehash.dhash(img, hash_size=16)
+            print(f"pHash (16x16) for {image_path}: {str(phash_value)}")
+            print(f"dHash (16x16) for {image_path}: {str(dhash_value)}")
+            return (phash_value, dhash_value)
     except Exception as e:
         print(f"Error hashing {image_path}: {e}")
         move_to_corrupted(corrupted_dir, image_path, "hashing failure")
         return None
 
 def get_video_frame_hashes(video_path, corrupted_dir, num_frames=3):
-    """Extract frames from a video and compute dhash for each."""
+    """Extract frames from a video and compute phash and dhash for each with 16x16 hash size."""
     temp_dir = None
     frame_paths = []
     try:
@@ -108,14 +111,16 @@ def get_video_frame_hashes(video_path, corrupted_dir, num_frames=3):
                 print(f"FFmpeg error extracting frame {i} from {video_path}: {e}")
                 print(f"FFmpeg stderr: {e.stderr}")
 
-        # Compute dhash for frames
+        # Compute phash and dhash for frames
         frame_hashes = []
         for frame_path in frame_paths:
             try:
                 with Image.open(frame_path) as img:
-                    frame_hash = imagehash.dhash(img)
-                    frame_hashes.append(frame_hash)
-                    print(f"Hash for {frame_path}: {str(frame_hash)}")
+                    phash_value = imagehash.phash(img, hash_size=16)
+                    dhash_value = imagehash.dhash(img, hash_size=16)
+                    frame_hashes.append((phash_value, dhash_value))
+                    print(f"pHash (16x16) for {frame_path}: {str(phash_value)}")
+                    print(f"dHash (16x16) for {frame_path}: {str(dhash_value)}")
             except Exception as e:
                 print(f"Error hashing frame {frame_path}: {e}")
         if not frame_hashes:
@@ -160,7 +165,7 @@ def get_next_available_number(folder_path, folder, extension, start_number):
             return i
         i += 1
 
-def process_folder(root_dir):
+def process_folder(root_dir, phash_threshold=20, dhash_threshold=2):
     """Process all media files in subfolders recursively."""
     media_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.mp4', '.mov', '.avi'}
     duplicates_dir = os.path.join(root_dir, "Duplicates")
@@ -235,10 +240,22 @@ def process_folder(root_dir):
                     continue
                 all_similar = True
                 for new_hash, existing_hash in zip(file_hashes, existing_hashes):
-                    threshold = 3 if mime_type.startswith('image') else 5  # Hamming distance: 3 for phash, 5 for dhash
-                    if new_hash - existing_hash > threshold:
+                    new_phash, new_dhash = new_hash
+                    existing_phash, existing_dhash = existing_hash
+                    phash_distance = new_phash - existing_phash
+                    dhash_distance = new_dhash - existing_dhash
+                    if phash_distance > phash_threshold or dhash_distance > dhash_threshold:
                         all_similar = False
                         break
+                    with open(os.path.join(root_dir, "deduplication_log.txt"), "a") as log_file:
+                        log_file.write(f"pHash (16x16) for {file_path}: {str(new_phash)}\n")
+                        log_file.write(f"dHash (16x16) for {file_path}: {str(new_dhash)}\n")
+                        log_file.write(f"pHash (16x16) for {hash_dict[existing_hashes]}: {str(existing_phash)}\n")
+                        log_file.write(f"dHash (16x16) for {hash_dict[existing_hashes]}: {str(existing_dhash)}\n")
+                        log_file.write(f"pHash distance for {file_path} vs {hash_dict[existing_hashes]}: {phash_distance}\n")
+                        log_file.write(f"dHash distance for {file_path} vs {hash_dict[existing_hashes]}: {dhash_distance}\n")
+                    print(f"pHash distance for {file_path} vs {hash_dict[existing_hashes]}: {phash_distance}")
+                    print(f"dHash distance for {file_path} vs {hash_dict[existing_hashes]}: {dhash_distance}")
                 if all_similar:
                     duplicate_path = os.path.join(duplicates_dir, f"{folder}_duplicate_{filename}")
                     shutil.move(file_path, duplicate_path)
@@ -282,12 +299,18 @@ def process_folder(root_dir):
 
 def main():
     """Main function to initiate processing."""
-    root_directory = "Content"
+    parser = argparse.ArgumentParser(description="Rename, clean, and deduplicate media files.")
+    parser.add_argument("--phash-threshold", type=int, default=20, help="Hamming distance threshold for deduplication (phash, 16x16)")
+    parser.add_argument("--dhash-threshold", type=int, default=2, help="Hamming distance threshold for deduplication (dhash, 16x16)")
+    parser.add_argument("--root-dir", type=str, default="Content", help="Root directory containing media files")
+    args = parser.parse_args()
+
+    root_directory = args.root_dir
     if not os.path.exists(root_directory):
         print(f"Directory '{root_directory}' not found.")
         return
-    print(f"Processing media files in '{root_directory}'...")
-    process_folder(root_directory)
+    print(f"Processing media files in '{root_directory}' with phash_threshold={args.phash_threshold}, dhash_threshold={args.dhash_threshold}...")
+    process_folder(root_dir=args.root_dir, phash_threshold=args.phash_threshold, dhash_threshold=args.dhash_threshold)
     print("Processing complete.")
 
 if __name__ == "__main__":

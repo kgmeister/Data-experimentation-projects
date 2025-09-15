@@ -544,7 +544,7 @@ INDEX_HTML = """
 </head>
 <body>
   <div class="container">
-    <h1>Cashew Chatbot (Local Proof of Concept)</h1>
+    <h1>Cashew Chatbot</h1>
     <div class="card">
       <div class="row">
         <div>

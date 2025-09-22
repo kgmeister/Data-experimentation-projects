@@ -11,6 +11,41 @@ import os, sys, json, re, time
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
+# --- Auto-install missing dependencies (no-op if already installed) ---
+# Place this block after stdlib imports and BEFORE any 3rd-party imports.
+try:
+    import importlib, subprocess, sys
+
+    def _ensure_deps():
+        # (module_import_name, [pip package(s) to install])
+        deps = [
+            ("flask",        ["flask"]),
+            ("flask_cors",   ["flask-cors"]),
+            ("pandas",       ["pandas"]),
+            ("numpy",        ["numpy"]),
+            ("requests",     ["requests"]),
+            ("dotenv",       ["python-dotenv"]),  # your code tries to import `dotenv`
+            # For reading Excel files in DataManager:
+            ("openpyxl",     ["openpyxl"]),       # .xlsx
+            ("xlrd",         ["xlrd"]),           # .xls
+        ]
+        for mod, pkgs in deps:
+            try:
+                importlib.import_module(mod)
+            except Exception:
+                try:
+                    subprocess.check_call([sys.executable, "-m", "pip", "install", *pkgs])
+                except Exception:
+                    # Fallback: bootstrap pip if environment is missing it
+                    import ensurepip
+                    ensurepip.bootstrap()
+                    subprocess.check_call([sys.executable, "-m", "pip", "install", *pkgs])
+
+    _ensure_deps()
+except Exception as _e:
+    print(f"[deps] Warning: {_e}")
+# --- End auto-install block ---
+
 from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 
@@ -441,3 +476,4 @@ if __name__ == "__main__":
     print(f"LLM engaged: {LLM_ENGAGED}" + ("" if LLM_ENGAGED else f" | last_error={LLM_LAST_ERROR}"))
     port = int(os.environ.get("CLARITY_PORT", 5000))
     app.run(host="127.0.0.1", port=port, debug=bool(os.environ.get("DEBUG")))
+

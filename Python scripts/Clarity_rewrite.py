@@ -1,7 +1,7 @@
 # Clarity.py — Staff-facing rewrite (no Nibbles) v1.5
 # - Plain-text replies (no markdown)
 # - Persona: 20+ yrs FMCG consultant; ends with a professional-opinion segue and 2–3 short paragraphs
-# - Hardcoded Q&A overrides for specific questions (Q1–Q6) with 3s pause
+# - Hardcoded Q&A overrides for specific questions (Q1–Q6) with 3s pause for experimentation
 # - Higher token limits to avoid truncation
 # - LLM engagement indicator via /health
 # - Session resets on page load; no Reset button
@@ -476,4 +476,5 @@ if __name__ == "__main__":
     print(f"LLM engaged: {LLM_ENGAGED}" + ("" if LLM_ENGAGED else f" | last_error={LLM_LAST_ERROR}"))
     port = int(os.environ.get("CLARITY_PORT", 5000))
     app.run(host="127.0.0.1", port=port, debug=bool(os.environ.get("DEBUG")))
+
 

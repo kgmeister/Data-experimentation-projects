@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# parallel_rename_clean_deduplicate_media_v6.py
+# parallel_rename_clean_deduplicate_media_v7.py
 # ==================================================================
 # Parallel media cleaner with safe rename -> EXIF strip -> hash -> tidy
 #
@@ -45,7 +45,7 @@ Image.MAX_IMAGE_PIXELS = None  # disable DecompressionBomb checks
 
 # ---------- Config / Constants ----------
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".jfif"}
-VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".m4v", ".flv", ".3gp"}
+VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".m4v", ".flv", ".3gp", ".wmv"}
 MEDIA_EXTS = IMAGE_EXTS | VIDEO_EXTS
 
 DEFAULT_PHASH_THRESHOLD = 10
@@ -503,5 +503,4 @@ def main():
     print("\n[done] Processing complete.")
 
 if __name__ == "__main__":
-
     main()

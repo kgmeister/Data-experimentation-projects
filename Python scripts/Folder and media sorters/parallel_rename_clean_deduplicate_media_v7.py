@@ -45,7 +45,7 @@ Image.MAX_IMAGE_PIXELS = None  # disable DecompressionBomb checks
 
 # ---------- Config / Constants ----------
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".jfif"}
-VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".m4v", ".flv", ".3gp", ".wmv", ".mpg"}
+VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".m4v", ".flv", ".3gp", ".wmv", ".mpg", ".mpeg"}
 MEDIA_EXTS = IMAGE_EXTS | VIDEO_EXTS
 
 DEFAULT_PHASH_THRESHOLD = 10
@@ -504,4 +504,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

@@ -79,6 +79,16 @@ load_env()
 CURRENCY     = os.environ.get("CURRENCY", "SGD").strip()
 COMPANY_NAME = os.environ.get("COMPANY_NAME", "Cashew4Nuts").strip()
 DATA_DIR     = os.environ.get("DATA_DIR", str(Path(__file__).resolve().parent))
+data_path = Path(DATA_DIR).resolve()
+if not data_path.exists() or not data_path.is_dir():
+    script_dir = Path(__file__).resolve().parent
+    fallback_name = Path(DATA_DIR).name
+    fallback_path = script_dir / fallback_name
+    if fallback_path.exists() and fallback_path.is_dir():
+        DATA_DIR = str(fallback_path)
+    else:
+        print(f"[warn] DATA_DIR {DATA_DIR} not found; fallback {fallback_path} also missing. Using script dir.")
+        DATA_DIR = str(script_dir)
 PORT         = int(os.environ.get("NIBBLES_PORT", "5001"))
 
 # ---------- LLM failover (embedded) ----------

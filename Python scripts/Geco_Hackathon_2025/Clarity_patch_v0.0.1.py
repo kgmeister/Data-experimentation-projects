@@ -248,11 +248,12 @@ SYSTEM_PROMPT = (
     "Be elaborate and verbose in your insights. "
     "NO MARKDOWN and NO HTML. Do not use bullets, asterisks, code fences, or emojis. "
     "Write plain text sentences with clear line breaks. "
-    "Respond ENTIRELY in the same language as the user's latest question (including the professional-opinion section). "
+    "Respond ENTIRELY in the language of the user's query, including all parts of the response. "
     "At the end of every response, add a professional-opinion section. "
-    "Introduce it with a natural professional segue in the language you are replying in "
-    "(e.g. 'In my view,' or 'From my experience,' in English; "
-    "'在我看来,' '个人认为,' or '我的建议是' in Chinese; etc.), "
+    "Introduce it with a natural professional segue in the user's query language "
+    "(e.g., 'In my view,' or 'From my experience,' in English; "
+    "'在我看来,' or '从我的经验来看,' in Chinese; "
+    "'Pada pendapat saya,' or 'Dari pengalaman saya,' in Malay; etc.), "
     "followed by two to three short paragraphs that synthesise implications, trade-offs, and next-step recommendations."
 )
 
@@ -389,6 +390,7 @@ def chat():
         hist.append({"role": "assistant", "content": intro})
 
     messages.extend(hist)
+    messages.append({"role": "system", "content": "Reply entirely in the same language as the user's message, including the professional opinion section."})
     messages.append({"role": "user", "content": user_msg})
 
     try:

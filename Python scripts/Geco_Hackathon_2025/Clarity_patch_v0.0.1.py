@@ -1,4 +1,3 @@
-
 # Clarity.py — Staff-facing (no Nibbles)
 # Patched for API failover
 # - Plain-text replies (no markdown)
@@ -510,6 +509,16 @@ def bootstrap_once():
     except Exception:
         pass
     data_dir = ENV.get("DATA_DIR", DEFAULT_DATA_DIR)
+    data_path = Path(data_dir).resolve()
+if not data_path.exists() or not data_path.is_dir():
+    script_dir = Path(__file__).resolve().parent
+    fallback_name = Path(data_dir).name
+    fallback_path = script_dir / fallback_name
+    if fallback_path.exists() and fallback_path.is_dir():
+        data_dir = str(fallback_path)
+    else:
+        print(f"[warn] data_dir {data_dir} not found; fallback {fallback_path} also missing. Using script dir.")
+        data_dir = str(script_dir)
     DM = DataManager(data_dir)
     probe_llm()
     print(f"[Clarity] LLM engaged: {LLM_ENGAGED}" + ("" if LLM_ENGAGED else f" | last_error={LLM_LAST_ERROR}"))

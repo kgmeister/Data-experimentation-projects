@@ -87,7 +87,7 @@ if not data_path.exists() or not data_path.is_dir():
     if fallback_path.exists() and fallback_path.is_dir():
         DATA_DIR = str(fallback_path)
     else:
-        print(f"[warn] DATA_DIR {DATA_DIR} not found; fallback {fallback_path} also missing. Using script dir.")
+        print(f"[warn] data_dir {DATA_DIR} not found; fallback {fallback_path} also missing. Using script dir.")
         DATA_DIR = str(script_dir)
 PORT         = int(os.environ.get("NIBBLES_PORT", "5001"))
 

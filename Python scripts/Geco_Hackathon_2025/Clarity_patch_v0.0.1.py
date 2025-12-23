@@ -42,7 +42,7 @@ except Exception as _e:
             print(f"[deps] Warning: {_e3}")
 # --- End auto-install block ---
 
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 
 import pandas as pd
@@ -246,8 +246,7 @@ SYSTEM_PROMPT = (
     "Audience is managers, decision makers, and the C-suite. "
     "Use ONLY the provided in-memory tables and the user's question to compute answers. "
     "Be elaborate and verbose in your insights. "
-    "NO MARKDOWN and NO HTML. Do not use bullets, asterisks, code fences, or emojis. "
-    "Write plain text sentences with clear line breaks. "
+    "Use markdown formatting for clarity: tables for data, **bold** for emphasis, headers for sections. "
     "Respond ENTIRELY in the language of the user's query, including all parts of the response. "
     "At the end of every response, add a professional-opinion section. "
     "Introduce it with a natural professional segue in the user's query language "
@@ -260,7 +259,7 @@ SYSTEM_PROMPT = (
 STARTUP_INSIGHTS_PROMPT = (
     "Generate a concise executive summary of 2–3 short paragraphs using the loaded tables. "
     "Surface notable year-over-year trends, anomalies in channel or SKU performance, and one operational risk. "
-    "Avoid bullet points and markdown. Plain text only."
+    "Use markdown formatting where helpful."
 )
 
 # ----------- Flask app setup -----------
@@ -272,6 +271,30 @@ ENV: Optional[Dict[str, Any]] = None
 DM: Optional[DataManager] = None
 LLM_ENGAGED: bool = False
 LLM_LAST_ERROR: Optional[str] = None
+
+# Server-side session storage (avoids cookie size limits)
+_sessions: Dict[str, Dict[str, Any]] = {}
+
+def _get_sid() -> str:
+    """Get or create session ID from request."""
+    # Try to get from JSON body first (for POST requests)
+    if request.method == "POST":
+        data = request.get_json(force=True, silent=True) or {}
+        if data.get("sid"):
+            return data["sid"]
+    # Fall back to cookie
+    sid = request.cookies.get("clarity_sid")
+    if not sid:
+        import uuid
+        sid = str(uuid.uuid4())
+    return sid
+
+def _get_session() -> Dict[str, Any]:
+    """Get server-side session for current request."""
+    sid = _get_sid()
+    if sid not in _sessions:
+        _sessions[sid] = {"history": [], "_bootstrapped": False}
+    return _sessions[sid]
 
 def load_env_chain() -> Dict[str, str]:
     """
@@ -333,10 +356,10 @@ def build_system_message() -> Dict[str, str]:
     return {"role": "system", "content": content}
 
 def get_history() -> List[Dict[str, str]]:
-    return session.get("history", [])
+    return _get_session().get("history", [])
 
 def set_history(hist: List[Dict[str, str]]):
-    session["history"] = hist
+    _get_session()["history"] = hist
 
 def startup_insights() -> str:
     messages = [build_system_message(),
@@ -348,13 +371,6 @@ def startup_insights() -> str:
         return f"(Startup insights unavailable: {e})"
 
 # ------------- Routes -------------
-@app.before_request
-def _ensure_boot():
-    if not session.get("_bootstrapped", False):
-        session["_bootstrapped"] = True
-        # Force-reset session history on first request of each browser session
-        session["history"] = []
-
 @app.route("/health", methods=["GET"])
 def health():
     probe_llm()
@@ -379,6 +395,8 @@ def chat():
     global LLM_ENGAGED, LLM_LAST_ERROR
     payload = request.get_json(force=True, silent=True) or {}
     user_msg: str = str(payload.get("message", "")).strip()
+    sid = _get_sid()
+    
     if not user_msg:
         return jsonify({"error": "Empty message"}), 400
 
@@ -406,9 +424,19 @@ def chat():
         hist[:] = hist[-30:]
     set_history(hist)
 
-    return jsonify({"reply": reply, "history_len": len(hist)})
+    resp = jsonify({"reply": reply, "history_len": len(hist)})
+    resp.set_cookie("clarity_sid", sid, max_age=86400*7, httponly=True, samesite="Lax")
+    return resp
 
-# ------------- Minimal UI (plain text only; no markdown transforms) -------------
+@app.route("/reset", methods=["POST", "GET"])
+def reset():
+    """Clear chat history for current session."""
+    sid = _get_sid()
+    if sid in _sessions:
+        _sessions[sid]["history"] = []
+    return jsonify({"ok": True, "message": "History cleared"})
+
+# ------------- UI with Markdown rendering -------------
 INDEX_HTML = r"""
 <!doctype html>
 <html>
@@ -416,6 +444,7 @@ INDEX_HTML = r"""
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Clarity — Staff Assistant</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     :root { --bg:#0f172a; --fg:#e2e8f0; --muted:#94a3b8; --card:#111827; --acc:#22d3ee; }
     body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:var(--bg); color:var(--fg); }
@@ -423,7 +452,7 @@ INDEX_HTML = r"""
     .brand { font-weight: 800; letter-spacing: 0.3px; font-size: 22px; }
     .card { background: var(--card); border: 1px solid #1f2937; border-radius: 16px; padding: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.25); }
     .log { height: 60vh; overflow:auto; display:flex; flex-direction:column; gap:12px; padding:8px; }
-    .msg { padding:12px 14px; border-radius: 14px; line-height: 1.5; }
+    .msg { padding:12px 14px; border-radius: 14px; line-height: 1.6; }
     .user { background:#0b1324; align-self:flex-end; }
     .bot  { background:#0b1f2a; border:1px solid #1e293b; }
     .sys  { color:var(--muted); font-style: italic; }
@@ -432,6 +461,24 @@ INDEX_HTML = r"""
     button { background:var(--acc); color:#001018; border:0; font-weight:700; padding:10px 14px; border-radius: 12px; cursor:pointer; }
     button:disabled { opacity: 0.6; cursor: not-allowed; }
     .small { color:var(--muted); font-size:12px; }
+    
+    /* Markdown content styling */
+    .msg.bot h1, .msg.bot h2, .msg.bot h3, .msg.bot h4 { margin: 0.8em 0 0.4em 0; color: var(--acc); }
+    .msg.bot h1 { font-size: 1.3em; }
+    .msg.bot h2 { font-size: 1.15em; }
+    .msg.bot h3 { font-size: 1.05em; }
+    .msg.bot p { margin: 0.5em 0; }
+    .msg.bot ul, .msg.bot ol { margin: 0.5em 0; padding-left: 1.5em; }
+    .msg.bot li { margin: 0.3em 0; }
+    .msg.bot strong { color: #fff; }
+    .msg.bot table { border-collapse: collapse; margin: 0.8em 0; width: 100%; font-size: 0.9em; }
+    .msg.bot th, .msg.bot td { border: 1px solid #334155; padding: 8px 10px; text-align: left; }
+    .msg.bot th { background: #1e293b; color: var(--acc); font-weight: 600; }
+    .msg.bot tr:nth-child(even) { background: rgba(30,41,59,0.5); }
+    .msg.bot code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+    .msg.bot pre { background: #1e293b; padding: 12px; border-radius: 8px; overflow-x: auto; }
+    .msg.bot pre code { background: none; padding: 0; }
+    .msg.bot blockquote { border-left: 3px solid var(--acc); margin: 0.5em 0; padding-left: 1em; color: var(--muted); }
   </style>
 </head>
 <body>
@@ -454,10 +501,18 @@ const msg = document.getElementById('msg');
 const send = document.getElementById('send');
 const statusEl = document.getElementById('status');
 
+// Configure marked for safe rendering
+marked.setOptions({ breaks: true, gfm: true });
+
 function add(role, text) {
   const div = document.createElement('div');
   div.className = 'msg ' + (role==='user'?'user':'bot');
-  div.textContent = text;
+  if (role === 'user') {
+    div.textContent = text;
+  } else {
+    // Render markdown for bot responses
+    div.innerHTML = marked.parse(text);
+  }
   log.appendChild(div);
   log.scrollTop = log.scrollHeight;
 }
@@ -494,6 +549,13 @@ send.onclick = async () => {
     send.disabled = false;
   }
 };
+
+// Allow Ctrl+Enter or Cmd+Enter to send
+msg.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    send.click();
+  }
+});
 </script>
 </body>
 </html>
@@ -537,5 +599,5 @@ if __name__ == "__main__":
     bootstrap_once()
     print(f"Loaded tables: {list((DM.tables.keys() if DM else []))}")
     print(f"LLM engaged: {LLM_ENGAGED}" + ("" if LLM_ENGAGED else f" | last_error={LLM_LAST_ERROR}"))
-    port = int(os.environ.get("CLARITY_PORT", 5000))
-    app.run(host="127.0.0.1", port=port, debug=bool(os.environ.get("DEBUG")))
+    port = int(os.environ.get("PORT", os.environ.get("CLARITY_PORT", 5000)))
+    app.run(host="0.0.0.0", port=port, debug=bool(os.environ.get("DEBUG")))

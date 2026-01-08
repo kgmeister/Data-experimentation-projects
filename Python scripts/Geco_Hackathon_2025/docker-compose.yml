@@ -1,0 +1,36 @@
+services:
+  nibbles:
+    image: cashew/nibbles:v1
+    container_name: nibbles
+    ports:
+      - "5001:5001"
+    env_file:
+      - /mnt/data/cashew-chatbot/llm.env
+    environment:
+      - PORT=5001
+      - ENV_FILE=/app/llm.env
+      - DATA_DIR=/app/Team_Cashew_Synthetic_Data
+      - COMPANY_NAME=Cashew4Nuts
+      - CURRENCY=SGD
+    volumes:
+      - /mnt/data/cashew-chatbot/Team_Cashew_Synthetic_Data:/app/Team_Cashew_Synthetic_Data:ro
+      - /mnt/data/cashew-chatbot/templates:/app/templates:ro
+      - /mnt/data/cashew-chatbot/llm.env:/app/llm.env:ro
+    restart: unless-stopped
+
+  clarity:
+    image: cashew/clarity:v1
+    container_name: clarity
+    ports:
+      - "5000:5000"
+    env_file:
+      - /mnt/data/cashew-chatbot/llm.env
+    environment:
+      - PORT=5000
+      - ENV_FILE=/app/llm.env
+      - DATA_DIR=/app/Team_Cashew_Synthetic_Data
+    volumes:
+      - /mnt/data/cashew-chatbot/Team_Cashew_Synthetic_Data:/app/Team_Cashew_Synthetic_Data:ro
+      - /mnt/data/cashew-chatbot/templates:/app/templates:ro
+      - /mnt/data/cashew-chatbot/llm.env:/app/llm.env:ro
+    restart: unless-stopped

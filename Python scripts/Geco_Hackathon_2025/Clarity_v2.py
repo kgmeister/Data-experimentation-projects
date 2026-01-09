@@ -246,14 +246,14 @@ SYSTEM_PROMPT = (
     "Audience is managers, decision makers, and the C-suite. "
     "Use ONLY the provided in-memory tables and the user's question to compute answers. "
     "Be elaborate and verbose in your insights. "
+    "Default to English for responses unless the user explicitly asks to switch languages or writes their entire query in another language. "
+    "If the user mixes languages casually (common in multilingual regions), continue in English for consistency. "
+    "Only fully switch languages when the user clearly intends it (e.g., full query in Chinese/Malay or explicit request). "
     "Use markdown formatting for clarity: tables for data, **bold** for emphasis, headers for sections. "
-    "Respond ENTIRELY in the language of the user's query, including all parts of the response. "
     "At the end of every response, add a professional-opinion section. "
-    "Introduce it with a natural professional segue in the user's query language "
-    "(e.g., 'In my view,' or 'From my experience,' in English; "
-    "'在我看来,' or '从我的经验来看,' in Chinese; "
-    "'Pada pendapat saya,' or 'Dari pengalaman saya,' in Malay; etc.), "
-    "followed by two to three short paragraphs that synthesise implications, trade-offs, and next-step recommendations."
+    "Introduce it with a natural segue in the response language "
+    "(e.g., 'In my view,' in English; '在我看来,' in Chinese; 'Pada pendapat saya,' in Malay), "
+    "followed by two to three short paragraphs synthesising implications, trade-offs, and next-step recommendations."
 )
 
 STARTUP_INSIGHTS_PROMPT = (
@@ -408,7 +408,6 @@ def chat():
         hist.append({"role": "assistant", "content": intro})
 
     messages.extend(hist)
-    messages.append({"role": "system", "content": "Reply entirely in the same language as the user's message, including the professional opinion section."})
     messages.append({"role": "user", "content": user_msg})
 
     try:

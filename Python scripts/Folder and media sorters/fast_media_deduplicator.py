@@ -22,18 +22,24 @@ HOW TO RUN:
    (Remember to put your path in quotes if it contains spaces!)
 ========================================================================
 """
-import os, re, sys, shutil, argparse, tempfile, subprocess, time, uuid, atexit, logging
+import os, re, sys, shutil, argparse, tempfile, subprocess, time, uuid, atexit, logging, importlib.util
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, Iterable, Union
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 
-try:
-    from PIL import Image, ImageOps, ImageFile
-    import imagehash
-except ImportError:
-    print("[Error] Missing dependencies. Run: pip install Pillow imagehash", file=sys.stderr)
-    sys.exit(1)
+def _ensure_packages():
+    need = {"PIL": "Pillow", "imagehash": "ImageHash"}
+    missing = [pip for mod, pip in need.items() if importlib.util.find_spec(mod) is None]
+    if missing:
+        print(f"[setup] Auto-installing required packages: {', '.join(missing)}", file=sys.stderr)
+        try: subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", *missing], check=True)
+        except subprocess.CalledProcessError:
+            subprocess.run([sys.executable, "-m", "pip", "install", "--user", "--upgrade", *missing], check=True)
+
+_ensure_packages()
+from PIL import Image, ImageOps, ImageFile
+import imagehash
 
 # Pillow configuration
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -59,6 +65,14 @@ RE_PATTERN_NUMBERED = re.compile(r"^(?P<base>.+?) \((?P<num>\d+)\)\.(?P<ext>[^.]
 # Logger setup
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
+
+# Best-effort temp sweep at exit (in case of abrupt crash/Ctrl+C)
+def _sweep_leftover_temp_dirs():
+    tdir = Path(tempfile.gettempdir())
+    for d in tdir.glob("vf_*"):
+        try: shutil.rmtree(d, ignore_errors=True)
+        except OSError: pass
+atexit.register(_sweep_leftover_temp_dirs)
 
 # ---------- FS / Logging Helpers ----------
 def ensure_dir(p: Path) -> Path:

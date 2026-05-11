@@ -1,4 +1,5 @@
-"""
+#!/usr/bin/env python3
+r"""
 ========================================================================
  FAST MEDIA DEDUPLICATOR (BK-Tree Edition) 
 ========================================================================
@@ -17,7 +18,7 @@ HOW TO RUN:
 2. If your media folder has a different name or is in a different 
    directory, use the --root-dir command line argument:
 
-    python fast_media_deduplicator.py --root-dir "C:\Path\To\Your\Photos"
+    python fast_media_deduplicator.py --root-dir "/path/to/your/photos"
 
    (Remember to put your path in quotes if it contains spaces!)
 ========================================================================

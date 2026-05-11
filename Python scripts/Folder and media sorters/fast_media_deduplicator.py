@@ -360,12 +360,19 @@ def main():
     folders = [p for p in root.rglob("*") if p.is_dir() and p.name not in (DUP_DIRNAME, CORRUPT_DIRNAME)]
     if root not in folders: folders.insert(0, root)
 
+    processed = 0
     for fld in folders:
         try:
             if not any(is_media(c) for c in fld.iterdir()): continue
             log.info(f"Processing: {fld}")
             run_dedupe(fld, dup_dir, corrupt_dir, CPU_COUNT, args)
+            processed += 1
         except OSError: pass
+
+    print(f"\n✅ Processing complete! {processed} folder(s) processed.")
+    print(f"   Duplicates → {dup_dir}")
+    print(f"   Corrupted  → {corrupt_dir}")
+    print(f"   Log file   → {root / 'dedup_log.txt'}")
 
 if __name__ == "__main__":
     main()

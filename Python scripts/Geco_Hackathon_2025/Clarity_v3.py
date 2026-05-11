@@ -61,7 +61,7 @@ class DataManager:
         return "\n".join(chunks)
 
 
-# ====================== LLM v3 ======================
+# ====================== LLM v3 - FIXED for Azure Foundry ======================
 def iter_llm_providers():
     env = dict(os.environ)
     providers = []
@@ -75,32 +75,39 @@ def iter_llm_providers():
             "api_url": url.strip().rstrip("/"),
             "api_key": key.strip(),
             "model": env.get(f"{prefix}MODEL") or env.get("MODEL"),
-            "api_version": env.get(f"{prefix}API_VERSION") or env.get("AZURE_API_VERSION") or "2024-10-21",
+            "api_version": env.get(f"{prefix}API_VERSION") or env.get("AZURE_API_VERSION"),
         })
     return providers
 
 
 def _build_url(base: str, model: str, api_version: str) -> str:
+    """Improved logic for Azure Foundry + standard endpoints"""
+    base = base.strip()
+
+    # If the URL already contains /chat/completions or /models/chat/completions → use as-is
     if "/chat/completions" in base.lower():
+        return base
+
+    # Azure Foundry style
+    if "services.ai.azure.com" in base.lower():
+        if "/models" not in base.lower():
+            base = base.rstrip("/") + "/models/chat/completions"
         if api_version and "?" not in base:
-            return f"{base}?api-version={api_version}"
+            base += f"?api-version={api_version}"
+        elif api_version:
+            base += f"&api-version={api_version}"
         return base
 
-    if "azure.com" in base.lower():
-        if "/deployments/" not in base.lower():
-            base = base.rstrip("/") + f"/openai/deployments/{model}/chat/completions"
-        else:
-            base = base.rstrip("/") + "/chat/completions"
-        if api_version:
-            base += ("?" if "?" not in base else "&") + f"api-version={api_version}"
-        return base
-
-    return base.rstrip("/") + "/chat/completions"
+    # Standard fallback
+    if not base.endswith("/chat/completions"):
+        base = base.rstrip("/") + "/chat/completions"
+    return base
 
 
 def _build_headers(p: dict) -> dict:
     headers = {"Content-Type": "application/json"}
-    if "azure" in p["api_url"].lower():
+    # Azure Foundry uses api-key
+    if "azure.com" in p["api_url"].lower() or "services.ai.azure.com" in p["api_url"].lower():
         headers["api-key"] = p["api_key"]
     else:
         headers["Authorization"] = f"Bearer {p['api_key']}"
@@ -110,7 +117,7 @@ def _build_headers(p: dict) -> dict:
 def chat_with_failover(messages: list) -> str:
     for p in iter_llm_providers():
         try:
-            url = _build_url(p["api_url"], p.get("model") or "gpt-4o", p.get("api_version"))
+            url = _build_url(p["api_url"], p.get("model"), p.get("api_version"))
             payload = {
                 "messages": messages,
                 "temperature": 0.2,
@@ -119,28 +126,35 @@ def chat_with_failover(messages: list) -> str:
             if p["model"]:
                 payload["model"] = p["model"]
 
-            print(f"[Clarity_v3] Trying {p['name']} → {url}")
+            print(f"[Clarity_v3] 🔥 Trying {p['name']} → {url}")
 
             r = requests.post(url, json=payload, headers=_build_headers(p), timeout=DEFAULT_TIMEOUT)
+            
+            print(f"[Clarity_v3] {p['name']} returned status: {r.status_code}")
+
             if r.status_code == 200:
-                return r.json()["choices"][0]["message"]["content"]
+                content = r.json()["choices"][0]["message"]["content"]
+                print(f"[Clarity_v3] ✅ Success with {p['name']}")
+                return content
             else:
-                print(f"[Clarity_v3] {p['name']} failed: {r.status_code}")
+                print(f"[Clarity_v3] ❌ {p['name']} failed: {r.status_code} - {r.text[:300]}")
+
         except Exception as e:
-            print(f"[Clarity_v3] {p['name']} error: {e}")
+            print(f"[Clarity_v3] {p['name']} exception: {e}")
             continue
-    return "[Error] All providers failed. Check llm.env configuration."
+
+    return "[Error] All providers failed. Check console logs for details."
 
 
-# ====================== APP ======================
+# ====================== FLASK ======================
 _sessions: Dict[str, dict] = {}
 DM: Optional[DataManager] = None
 
 SYSTEM_PROMPT = (
     "You are a Management Consultant with 20+ years of experience in FMCG. "
     "You specialize in supply chain, sales, digital marketing, and retail operations. "
-    "Use ONLY the provided in-memory tables. Be elaborate. Use markdown. "
-    "At the end, add a professional-opinion section with 2–3 short paragraphs."
+    "Use ONLY the provided in-memory tables. Be elaborate and verbose. "
+    "Use markdown. At the end, add a professional-opinion section with 2–3 short paragraphs."
 )
 
 def get_session():
@@ -195,4 +209,4 @@ def ensure_boot(): bootstrap()
 if __name__ == "__main__":
     bootstrap()
     port = int(os.environ.get("CLARITY_PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=os.getenv("DEBUG")=="1")
+    app.run(host="0.0.0.0", port=port, debug=True)

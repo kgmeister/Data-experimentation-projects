@@ -369,7 +369,7 @@ def main():
             processed += 1
         except OSError: pass
 
-    print(f"\n✅ Processing complete! {processed} folder(s) processed.")
+    print(f"   Processing complete! {processed} folder(s) processed.")
     print(f"   Duplicates → {dup_dir}")
     print(f"   Corrupted  → {corrupt_dir}")
     print(f"   Log file   → {root / 'dedup_log.txt'}")
